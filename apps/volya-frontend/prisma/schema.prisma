@@ -1,62 +1,45 @@
-// 1. Конфігурація генератора клієнта Prisma
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
 generator client {
   provider = "prisma-client-js"
 }
 
-// 2. Блок підключення до бази даних (БЕЗ властивості url, як вимагає Prisma 7!)
-datasource db {
-  provider = "postgresql"
+// Модель учня (Student)
+model Student {
+  id         String        @id @default(uuid())
+  name       String
+  phone      String
+  grade      String        @default("11 клас")
+  subject    String        @default("Математика")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  notes      StudentNote[]
+
+  @@map("students") // Примусово називаємо таблицю в Supabase як "students"
 }
 
-// ==========================================
-// МОДЕЛІ ДЛЯ БІЗНЕС-ЛОГІКИ VOLYA.ACADEMIC
-// ==========================================
+// Модель нотаток та завдань (StudentNote)
+model StudentNote {
+  id         String   @id @default(uuid())
+  studentId  String?  @map("student_id")
+  authorName String   @default("Адміністратор") @map("author_name")
+  category   Category @default(GENERAL)
+  text       String
+  createdAt  DateTime @default(now()) @map("created_at")
 
-// Перелік статусів для воронки лідів (CRM)
-enum LeadStatus {
-  NEW
-  IN_PROGRESS
-  TRIAL_SCHEDULED
-  CONVERTED
-  LOST
+  // Зв'язок із таблицею учнів (якщо studentId видалити, нотатка залишиться як глобальна)
+  student    Student? @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@map("student_notes") // Примусово називаємо таблицю в Supabase як "student_notes"
 }
 
-// Перелік основних предметів академії точних наук
-enum SubjectType {
-  MATHEMATICS
-  PHYSICS
-  CHEMISTRY
-}
-
-// Глобальні ролі користувачів у системі (RBAC)
-enum Role {
-  ADMIN
-  MANAGER
-  TEACHER
-  STUDENT
-}
-
-// Модель для збору та обробки заявок з сайту
-model Lead {
-  id        String      @id @default(uuid())
-  name      String
-  phone     String
-  subject   SubjectType @default(MATHEMATICS)
-  status    LeadStatus  @default(NEW)
-  notes     String?
-  createdAt DateTime    @default(now())
-  updatedAt DateTime    @updatedAt
-
-  // Індексація статусу для швидкого пошуку та рендерингу Kanban-дошки
-  @@index([status])
-}
-
-// Глобальна модель користувача (адміни, менеджери, вчителі, учні)
-model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  name      String
-  role      Role     @default(STUDENT)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+// Категорії для нотаток
+enum Category {
+  GENERAL
+  ACADEMIC
+  FINANCIAL
+  SYSTEM
 }
