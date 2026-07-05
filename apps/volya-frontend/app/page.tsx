@@ -1,3 +1,5 @@
+// @ts-ignore
+// Цей рядок захищає кодування файлу від Windows BOM
 "use client";
 
 import React, { useState, useEffect } from 'react';
