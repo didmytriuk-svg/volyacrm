@@ -1,13 +1,8 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
-  typescript: {
-    // Ігноруємо помилки типів під час збірки, щоб запустити MVP
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    // Ігноруємо помилки лінтера під час збірки
-    ignoreDuringBuilds: true,
-  },
+import type { NextConfig } from "next";
+
+const nextConfig: NextConfig = {
+  /* Якщо тут були інші налаштування, наприклад reactStrictMode, залиш їх. Головне — прибрати eslint */
+  reactStrictMode: true,
 };
 
 export default nextConfig;
