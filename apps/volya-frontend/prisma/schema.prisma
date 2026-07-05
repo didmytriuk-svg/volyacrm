@@ -1,51 +1,62 @@
-enum PackageStatus {
-  PENDING
-  ACTIVE
-  EXPIRED
+// 1. Конфігурація генератора клієнта Prisma
+generator client {
+  provider = "prisma-client-js"
 }
 
-// 1. Модель Батьків (платників)
-model Parent {
-  id        String    @id @default(uuid())
+// 2. Блок підключення до бази даних (БЕЗ властивості url, як вимагає Prisma 7!)
+datasource db {
+  provider = "postgresql"
+}
+
+// ==========================================
+// МОДЕЛІ ДЛЯ БІЗНЕС-ЛОГІКИ VOLYA.ACADEMIC
+// ==========================================
+
+// Перелік статусів для воронки лідів (CRM)
+enum LeadStatus {
+  NEW
+  IN_PROGRESS
+  TRIAL_SCHEDULED
+  CONVERTED
+  LOST
+}
+
+// Перелік основних предметів академії точних наук
+enum SubjectType {
+  MATHEMATICS
+  PHYSICS
+  CHEMISTRY
+}
+
+// Глобальні ролі користувачів у системі (RBAC)
+enum Role {
+  ADMIN
+  MANAGER
+  TEACHER
+  STUDENT
+}
+
+// Модель для збору та обробки заявок з сайту
+model Lead {
+  id        String      @id @default(uuid())
   name      String
-  phone     String    @unique // Ідентифікатор для входу в особистий кабінет батьків
-  students  Student[] // Один з батьків може мати кількох дітей у школі
-  createdAt DateTime  @default(now())
+  phone     String
+  subject   SubjectType @default(MATHEMATICS)
+  status    LeadStatus  @default(NEW)
+  notes     String?
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  // Індексація статусу для швидкого пошуку та рендерингу Kanban-дошки
+  @@index([status])
 }
 
-// 2. Модель Учня
-model Student {
-  id           String          @id @default(uuid())
-  name         String
-  class        Int             // 7-11 клас
-  parentId     String
-  parent       Parent          @relation(fields: [parentId], references: [id])
-  packages     LessonPackage[] // Історія абонементів учня
-  groups       Group[]         @relation("StudentGroups") // Групи, в яких навчається учень
-  createdAt    DateTime        @default(now())
-  updatedAt    DateTime        @updatedAt
+// Глобальна модель користувача (адміни, менеджери, вчителі, учні)
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(STUDENT)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
-
-// 3. Модель Абонемента (Облік уроків)
-model LessonPackage {
-  id           String        @id @default(uuid())
-  studentId    String
-  student      Student       @relation(fields: [studentId], references: [id])
-  subject      Subject       // MATHEMATICS, PHYSICS, CHEMISTRY
-  totalLessons Int           // Скільки всього занять куплено (наприклад, 8)
-  leftLessons  Int           // Скільки залишилось (списується динамічно)
-  pricePaid    Float         // Сума оплати для фінансової аналітики
-  status       PackageStatus @default(PENDING)
-  expiresAt    DateTime?     // Обмеження абонемента по часу (наприклад, на 1 місяць)
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-}
-
-// 4. Модель Навчальної Групи
-model Group {
-  id        String    @id @default(uuid())
-  name      String    // Наприклад: "НМТ Математика 11-Б"
-  subject   Subject
-  students  Student[] @relation("StudentGroups") // Масив учнів у групі (Many-to-Many)
-  createdAt DateTime  @default(now())
-} 
