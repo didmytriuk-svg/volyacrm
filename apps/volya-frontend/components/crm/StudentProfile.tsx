@@ -3,198 +3,191 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 
-interface LessonPackage {
+interface Student {
   id: string;
-  subject: 'MATHEMATICS' | 'PHYSICS' | 'CHEMISTRY';
-  total_lessons: number;
-  left_lessons: number;
-  price_expected: number;
-  price_paid: number;
-}
-
-interface Transaction {
-  id: string;
-  amount: number;
-  type: string;
-  comment: string | null;
+  name: string;
+  phone: string;
+  grade: string;
+  subject: string;
   created_at: string;
 }
 
-interface StudentData {
-  id: string;
-  name: string;
-  student_class: number;
-  parents?: { name: string; phone: string; };
-}
-
-export default function StudentProfile({ studentId }: { studentId: string }) {
-  const [student, setStudent] = useState<StudentData | null>(null);
-  const [packages, setPackages] = useState<LessonPackage[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+export default function StudentProfile() {
+  const [students, setStudents] = useState<Student[]>([]);
   const [loading, setLoading] = useState(true);
   
-  // Стейт для внесення швидкої оплати
-  const [payAmount, setPayAmount] = useState('');
-  const [payComment, setPayComment] = useState('');
+  // Поля форми для створення нового учня
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [grade, setGrade] = useState('11 клас');
+  const [subject, setSubject] = useState('Математика');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const loadFinancialData = async () => {
+  // Завантаження списку учнів
+  const loadStudents = async () => {
     try {
       setLoading(true);
-      const { data: sData } = await supabase
-        .from('students')
-        .select('id, name, student_class, parents (name, phone)')
-        .eq('id', studentId).single();
-      setStudent(sData as any);
-
-      const { data: pData } = await supabase
-        .from('lesson_packages')
+      const { data, error } = await supabase
+        .from('students') // Переконайся, що таблиця в Supabase називається 'students'
         .select('*')
-        .eq('student_id', studentId)
-        .eq('status', 'ACTIVE');
-      setPackages(pData as any[] || []);
-
-      const { data: tData } = await supabase
-        .from('financial_transactions')
-        .select('*')
-        .eq('student_id', studentId)
         .order('created_at', { ascending: false });
-      setTransactions(tData as any[] || []);
+
+      if (error) throw error;
+      if (data) setStudents(data);
     } catch (err) {
-      console.error(err);
+      console.error('Помилка завантаження учнів:', err);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    if (studentId) loadFinancialData();
-  }, [studentId]);
+    loadStudents();
+  }, []);
 
-  const handleAddTransaction = async (e: React.FormEvent, pkgId: string, currentPaid: number) => {
+  // Хендлер відправки форми
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!payAmount || Number(payAmount) <= 0) return;
+    if (!name.trim() || !phone.trim()) return;
     setIsSubmitting(true);
 
     try {
-      const amountNum = Number(payAmount);
-      
-      // 1. Записуємо транзакцію в реєстр
-      const { error: tErr } = await supabase
-        .from('financial_transactions')
+      const { error } = await supabase
+        .from('students')
         .insert({
-          package_id: pkgId,
-          student_id: studentId,
-          amount: amountNum,
-          comment: payComment.trim() || 'Оплата абонемента'
+          name: name.trim(),
+          phone: phone.trim(),
+          grade,
+          subject,
         });
 
-      if (tErr) throw tErr;
+      if (error) throw error;
 
-      // 2. Оновлюємо накопичувальний баланс оплати в абонементі
-      await supabase
-        .from('lesson_packages')
-        .update({ price_paid: currentPaid + amountNum })
-        .eq('id', pkgId);
-
-      setPayAmount('');
-      setPayComment('');
-      await loadFinancialData(); // Реактивне перевантаження фінансового стану
+      // Очищення полів після успішного додавання
+      setName('');
+      setPhone('');
+      
+      // Перезавантажуємо список
+      await loadStudents();
     } catch (err) {
-      console.error(err);
+      console.error('Помилка при додаванні учня:', err);
+      alert('Не вдалося додати учня. Перевірте назву таблиці в базі даних.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (loading) return <div className="bg-blue-600 rounded-3xl p-8 text-white/50 text-xs font-bold font-mono uppercase tracking-widest animate-pulse">Синхронізація каси...</div>;
-  if (!student) return null;
-
-  const activePkg = packages[0];
-  // Обчислення боргу за абонементом
-  const debt = activePkg ? activePkg.price_expected - activePkg.price_paid : 0;
-
   return (
-    <div className="space-y-6">
-      {/* 🔵 THE SOLID BLUE SaaS CARD (Reference to image_71cdd5.jpg Left Column) */}
-      <div className="bg-blue-600 rounded-3xl p-6 text-white shadow-xl shadow-blue-600/10 flex flex-col justify-between min-h-[420px]">
+    <div className="space-y-8">
+      {/* Шапка */}
+      <div className="flex justify-between items-center pb-4 border-b border-[#E2E8F0]">
         <div>
-          <div className="flex justify-between items-start">
-            <div>
-              <h2 className="text-2xl font-black tracking-tight leading-tight uppercase">{student.name}</h2>
-              <span className="inline-block mt-2 px-3 py-0.5 bg-white/20 border border-white/10 text-white text-[11px] font-bold rounded-lg font-mono">
-                {student.student_class} клас
-              </span>
-            </div>
-            {debt > 0 ? (
-              <span className="text-[10px] bg-red-500 text-white font-black px-2.5 py-1 rounded-xl uppercase tracking-wider animate-pulse">Борг {debt} грн</span>
-            ) : (
-              <span className="text-[10px] bg-emerald-500 text-white font-black px-2.5 py-1 rounded-xl uppercase tracking-wider">Оплачено</span>
-            )}
-          </div>
-
-          {/* MAIN COUNT METRIC */}
-          <div className="my-8 border-t border-white/10 pt-6">
-            <span className="text-[10px] uppercase tracking-widest font-bold opacity-60 block">Залишок занять ({activePkg ? (activePkg.subject === 'MATHEMATICS' ? 'Математика' : 'Фізика') : 'Немає абонемента'})</span>
-            <div className="flex items-baseline gap-2 mt-2">
-              <span className="text-6xl font-black tracking-tighter font-mono">
-                {activePkg ? activePkg.left_lessons : '0'}
-              </span>
-              <span className="text-xl font-medium opacity-40 font-mono">
-                / {activePkg ? activePkg.total_lessons : '0'} уроків
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* FINANCIAL SUMMARY COUNTERS INSIDE CARD */}
-        <div className="grid grid-cols-2 gap-2 border-t border-white/10 pt-4 text-xs font-mono">
-          <div>
-            <span className="opacity-50 text-[9px] uppercase font-bold block">Сплачено</span>
-            <span className="font-bold text-lg">{activePkg ? activePkg.price_paid : 0} грн</span>
-          </div>
-          <div className="text-right">
-            <span className="opacity-50 text-[9px] uppercase font-bold block">Вартість договору</span>
-            <span className="font-bold text-lg">{activePkg ? activePkg.price_expected : 0} грн</span>
-          </div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-[#94A3B8]">Керування базою учнів</h3>
+          <p className="text-[11px] text-[#64748B] mt-0.5">Додавання нових студентів та перегляд карток успішності</p>
         </div>
       </div>
 
-      {/* 💵 QUICK TRANSACTION INPUT TOOL (Reference to image_71cdd5.jpg widgets style) */}
-      {activePkg && debt > 0 && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm space-y-3">
-          <span className="text-[10px] font-black uppercase tracking-wider text-red-500 block">Внесення оплати за борг</span>
-          <form onSubmit={(e) => handleAddTransaction(e, activePkg.id, activePkg.price_paid)} className="space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <input type="number" max={debt} required value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder={`Сума, макс. ${debt}`} className="w-full bg-slate-50 text-slate-800 px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-bold font-mono" />
-              <input type="text" value={payComment} onChange={e => setPayComment(e.target.value)} placeholder="Коментар (напр. Приват24)" className="w-full bg-slate-50 text-slate-800 px-3 py-2 text-xs border border-slate-200 rounded-xl focus:outline-none focus:border-blue-500 font-medium" />
-            </div>
-            <button type="submit" disabled={isSubmitting} className="w-full py-2 bg-zinc-900 hover:bg-zinc-800 text-white text-xs font-bold uppercase rounded-xl transition-all">
-              {isSubmitting ? 'Проведення платежу...' : 'Зарахувати гроші'}
-            </button>
-          </form>
-        </div>
-      )}
+      {/* Форма додавання нового учня (Soft SaaS Style) */}
+      <div className="bg-[#F8FAFC] p-6 rounded-2xl border border-[#E2E8F0]/60">
+        <h4 className="text-xs font-bold uppercase text-[#0F172A] mb-4">Швидка реєстрація учня</h4>
+        
+        <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3 items-end">
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-[#94A3B8] mb-1.5">ПІБ Учня</label>
+            <input 
+              type="text" 
+              required
+              value={name}
+              onChange={e => setName(e.target.value)}
+              placeholder="Дмитро Коваленко" 
+              className="w-full bg-white text-[#0F172A] px-4 py-2.5 text-xs border border-[#E2E8F0] rounded-xl focus:outline-none focus:border-[#2F80ED] font-medium transition-all"
+            />
+          </div>
 
-      {/* 📜 HISTORICAL FINANCIAL LEDGER */}
-      {transactions.length > 0 && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-5 shadow-sm">
-          <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block mb-3">Історія фінансових надходжень</span>
-          <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1">
-            {transactions.map(t => (
-              <div key={t.id} className="flex justify-between items-center text-xs p-2.5 bg-slate-50 rounded-xl border border-slate-100 font-mono">
-                <div>
-                  <span className="font-bold text-slate-800">+{t.amount} грн</span>
-                  <p className="text-[9px] text-slate-400 mt-0.5 font-sans">{t.comment}</p>
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-[#94A3B8] mb-1.5">Телефон</label>
+            <input 
+              type="tel" 
+              required
+              value={phone}
+              onChange={e => setPhone(e.target.value)}
+              placeholder="+380951112233" 
+              className="w-full bg-white text-[#0F172A] px-4 py-2.5 text-xs border border-[#E2E8F0] rounded-xl focus:outline-none focus:border-[#2F80ED] font-medium transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-[#94A3B8] mb-1.5">Клас</label>
+            <select 
+              value={grade}
+              onChange={e => setGrade(e.target.value)}
+              className="w-full bg-white text-[#475569] px-4 py-2.5 text-xs rounded-xl font-semibold border border-[#E2E8F0] focus:outline-none focus:border-[#2F80ED] cursor-pointer"
+            >
+              <option value="9 клас">9 клас</option>
+              <option value="10 клас">10 клас</option>
+              <option value="11 клас">11 клас</option>
+              <option value="НМТ/ЗНО">Курс НМТ</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold uppercase text-[#94A3B8] mb-1.5">Предмет</label>
+            <select 
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              className="w-full bg-white text-[#475569] px-4 py-2.5 text-xs rounded-xl font-semibold border border-[#E2E8F0] focus:outline-none focus:border-[#2F80ED] cursor-pointer"
+            >
+              <option value="Математика">Математика (МАТ)</option>
+              <option value="Фізика">Фізика (ФІЗ)</option>
+              <option value="Астрономія">Астрономія (АСТ)</option>
+            </select>
+          </div>
+
+          <div>
+            <button 
+              type="submit"
+              disabled={isSubmitting}
+              className="w-full py-2.5 bg-[#2F80ED] hover:bg-[#1B6AD1] text-white text-xs font-bold rounded-xl shadow-md shadow-[#2F80ED]/10 transition-all disabled:opacity-40"
+            >
+              {isSubmitting ? 'Збереження...' : 'Додати'}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Список доданих учнів */}
+      <div className="space-y-3">
+        <h4 className="text-xs font-bold uppercase text-[#94A3B8] px-1">Зареєстровані студенти ({students.length})</h4>
+        
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-8 text-[#94A3B8] gap-2">
+            <span className="w-5 h-5 rounded-full border-2 border-[#2F80ED] border-t-transparent animate-spin block"></span>
+          </div>
+        ) : students.length === 0 ? (
+          <div className="text-center py-8 bg-[#F8FAFC]/40 rounded-2xl border border-dashed border-[#E2E8F0]">
+            <p className="text-xs text-[#94A3B8] font-medium italic">База учнів поки порожня.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {students.map(student => (
+              <div key={student.id} className="p-4 bg-white rounded-2xl border border-[#E2E8F0]/70 hover:border-[#E2E8F0] transition-all flex justify-between items-center shadow-sm">
+                <div className="space-y-1">
+                  <h5 className="text-xs font-bold text-[#0F172A]">{student.name}</h5>
+                  <p className="text-[11px] font-medium text-[#64748B]">{student.phone}</p>
                 </div>
-                <span className="text-[10px] text-slate-400">
-                  {new Date(t.created_at).toLocaleDateString('uk-UA')}
-                </span>
+                <div className="flex gap-1.5">
+                  <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-[#F1F5F9] text-[#475569]">
+                    {student.grade}
+                  </span>
+                  <span className="px-2 py-0.5 rounded-lg text-[9px] font-bold bg-[#E2EFFFF] text-[#2F80ED]">
+                    {student.subject === 'Математика' ? 'МАТ' : student.subject === 'Фізика' ? 'ФІЗ' : 'АСТ'}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
