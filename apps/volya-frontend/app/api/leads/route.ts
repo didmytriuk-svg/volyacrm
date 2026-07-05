@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '../../../lib/db'; // Наш синглтон бази даних
+export const dynamic = "force-dynamic";
 
 export async function PATCH(
   request: Request,
